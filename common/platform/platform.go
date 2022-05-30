@@ -14,8 +14,8 @@ type EnvFlag struct {
 
 func NewEnvFlag(name string) EnvFlag {
 	return EnvFlag{
-		Name:    name,
-		AltName: NormalizeEnvName(name),
+		Name:    name, // v2ray.location.confdir
+		AltName: NormalizeEnvName(name), // v2ray_location_confdir
 	}
 }
 

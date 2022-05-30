@@ -37,9 +37,12 @@ func OptionsFromContext(ctx context.Context) []Option {
 	var opt []Option
 
 	bp := policy.BufferPolicyFromContext(ctx)
+
+	// 应该是-1
 	if bp.PerConnection >= 0 {
 		opt = append(opt, WithSizeLimit(bp.PerConnection))
 	} else {
+		//
 		opt = append(opt, WithoutSizeLimit())
 	}
 
@@ -49,14 +52,30 @@ func OptionsFromContext(ctx context.Context) []Option {
 // New creates a new Reader and Writer that connects to each other.
 func New(opts ...Option) (*Reader, *Writer) {
 	p := &pipe{
+		/**
+		signal.NewNotifier():
+			&Notifier{
+				c: make(chan struct{}, 1),
+			}
+		*/
 		readSignal:  signal.NewNotifier(),
 		writeSignal: signal.NewNotifier(),
+
+		/**
+		done.New():
+ 			&Instance{
+				c: make(chan struct{}),
+			}
+		*/
 		done:        done.New(),
 		option: pipeOption{
 			limit: -1,
 		},
 	}
 
+	// func(opt *pipeOption) {
+	// 	opt.limit = limit
+	// }
 	for _, opt := range opts {
 		opt(&(p.option))
 	}

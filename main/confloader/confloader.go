@@ -30,5 +30,7 @@ func LoadExtConfig(files []string) (io.Reader, error) {
 		return nil, newError("external config module not loaded").AtError()
 	}
 
+	// 在/Users/demon/Desktop/work/gowork/src/v2ray.com/core/main/confloader/external/external.go 里面赋值
+	// 真TM的服了, 是为了把人搞晕才这搞一点那搞一点的嘛？
 	return EffectiveExtConfigLoader(files)
 }

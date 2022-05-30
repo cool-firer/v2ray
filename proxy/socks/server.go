@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"time"
+	"fmt"
 
 	"v2ray.com/core"
 	"v2ray.com/core/common"
@@ -63,6 +64,7 @@ func (s *Server) Network() []net.Network {
 
 // Process implements proxy.Inbound.
 func (s *Server) Process(ctx context.Context, network net.Network, conn internet.Connection, dispatcher routing.Dispatcher) error {
+	fmt.Println("I am socks Process")
 	if inbound := session.InboundFromContext(ctx); inbound != nil {
 		inbound.User = &protocol.MemoryUser{
 			Level: s.config.UserLevel,
@@ -81,6 +83,24 @@ func (s *Server) Process(ctx context.Context, network net.Network, conn internet
 
 func (s *Server) processTCP(ctx context.Context, conn internet.Connection, dispatcher routing.Dispatcher) error {
 	plcy := s.policy()
+	/**
+	Session{
+			Timeouts: Timeout{
+				//Align Handshake timeout with nginx client_header_timeout
+				//So that this value will not indicate server identity
+				Handshake:      time.Second * 60,
+				ConnectionIdle: time.Second * 300,
+				UplinkOnly:     time.Second * 1,
+				DownlinkOnly:   time.Second * 1,
+			},
+			Stats: Stats{
+				UserUplink:   false,
+				UserDownlink: false,
+			},
+			Buffer: defaultBufferPolicy(),
+		}
+
+	*/
 	if err := conn.SetReadDeadline(time.Now().Add(plcy.Timeouts.Handshake)); err != nil {
 		newError("failed to set deadline").Base(err).WriteToLog(session.ExportIDToError(ctx))
 	}
@@ -92,10 +112,12 @@ func (s *Server) processTCP(ctx context.Context, conn internet.Connection, dispa
 
 	svrSession := &ServerSession{
 		config: s.config,
-		port:   inbound.Gateway.Port,
+		port:   inbound.Gateway.Port, // 1080
 	}
 
 	reader := &buf.BufferedReader{Reader: buf.NewReader(conn)}
+
+	fmt.Println("in processTCP Handshake ...")
 	request, err := svrSession.Handshake(reader, conn)
 	if err != nil {
 		if inbound != nil && inbound.Source.IsValid() {
@@ -108,6 +130,8 @@ func (s *Server) processTCP(ctx context.Context, conn internet.Connection, dispa
 		}
 		return newError("failed to read request").Base(err)
 	}
+	fmt.Println("in processTCP Handshake done, request:", request)
+
 	if request.User != nil {
 		inbound.User.Email = request.User.Email
 	}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"fmt"
 
 	"v2ray.com/core"
 	"v2ray.com/core/common"
@@ -38,6 +39,13 @@ type userByEmail struct {
 }
 
 func newUserByEmail(config *DefaultConfig) *userByEmail {
+	/**
+	config: 
+	&DefaultConfig{
+			AlterId: 32,
+			Level:   0,
+		}
+	*/
 	return &userByEmail{
 		cache:           make(map[string]*protocol.MemoryUser),
 		defaultLevel:    config.Level,
@@ -113,6 +121,16 @@ type Handler struct {
 
 // New creates a new VMess inbound handler.
 func New(ctx context.Context, config *Config) (*Handler, error) {
+
+	/**
+			config: user:{
+				account:{
+					type:"v2ray.core.proxy.vmess.Account"  
+					value:"\n$b831381d-6324-4d53-ad4f-8cda48b30811\x1a\x02\x08\x02"
+				}
+			}
+	*/
+
 	v := core.MustFromContext(ctx)
 	handler := &Handler{
 		policyManager:         v.GetFeature(policy.ManagerType()).(policy.Manager),
@@ -124,15 +142,84 @@ func New(ctx context.Context, config *Config) (*Handler, error) {
 		secure:                config.SecureEncryptionOnly,
 	}
 
+	/**
+		此时的 handler
+		handler: &{
+			policyManager: 指向server里features里的同类,
+			inboundHandlerManager:  指向server里features里的同类,
+
+			clients: &TimedUserValidator{
+				users:             make([]*user, 0, 16),
+				userHash:          make(map[[16]byte]indexTimePair, 1024),
+				hasher:            一个func: protocol.DefaultIDHash,
+				baseTime:          protocol.Timestamp(time.Now().Unix() - cacheDurationSec*2),
+				aeadDecoderHolder: aead.NewAuthIDDecoderHolder(),
+			},
+
+			detours: nil,
+			usersByEmail: &userByEmail{
+				cache:           make(map[string]*protocol.MemoryUser),
+				defaultLevel:    0,
+				defaultAlterIDs: 32,
+			},
+			sessionHistory:        encoding.NewSessionHistory(),
+			secure:                config.SecureEncryptionOnly,
+		}
+	*/
+
 	for _, user := range config.User {
+
+		/**
+			mUser = &MemoryUser{
+				Account: &vmess.Account{
+					Id: 'b831381d-6324-4d53-ad4f-8cda48b30811',
+					AlterId: 0,
+					securitySettings: &protocol.SecurityConfig{ Type: 'AUTO' }
+				},
+				Email:   ''
+				Level:   0
+			}
+		*/
 		mUser, err := user.ToMemoryUser()
 		if err != nil {
 			return nil, newError("failed to get VMess user").Base(err)
 		}
 
+		// 往clients添加
 		if err := handler.AddUser(ctx, mUser); err != nil {
 			return nil, newError("failed to initiate user").Base(err)
 		}
+
+		// AddUser后
+	/**
+		此时的 handler
+		handler: &{
+			policyManager: 指向server里features里的同类,
+			inboundHandlerManager:  指向server里features里的同类,
+
+			clients: &TimedUserValidator{
+				users: [
+					&user{
+						user: *mUser,
+						lastSec: protocol.Timestamp(nowSec - cacheDurationSec),
+					},
+				],
+				userHash: make(map[[16]byte]indexTimePair, 1024), 有值
+				hasher:  一个func: protocol.DefaultIDHash,
+				baseTime: protocol.Timestamp(time.Now().Unix() - cacheDurationSec*2),
+				aeadDecoderHolder: aead.NewAuthIDDecoderHolder(), 有值
+			},
+
+			detours: nil,
+			usersByEmail: &userByEmail{
+				cache:           make(map[string]*protocol.MemoryUser),
+				defaultLevel:    0,
+				defaultAlterIDs: 32,
+			},
+			sessionHistory: encoding.NewSessionHistory(),
+			secure:          false
+		}
+	*/
 	}
 
 	return handler, nil
@@ -148,6 +235,7 @@ func (h *Handler) Close() error {
 
 // Network implements proxy.Inbound.Network().
 func (*Handler) Network() []net.Network {
+	// type Network int32
 	return []net.Network{net.Network_TCP}
 }
 
@@ -352,6 +440,35 @@ func (h *Handler) generateCommand(ctx context.Context, request *protocol.Request
 
 func init() {
 	common.Must(common.RegisterConfig((*Config)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+
+		/**
+
+			proxyConfig: {
+				type: 'v2ray.core.proxy.vmess.inbound.Config',
+				value:  最终的config(proto生成的结构体): {
+								SecureEncryptionOnly: false
+								User: [
+									proto生成的protocol.User结构体 {
+										Account: {
+												type: 'v2ray.core.proxy.vemss.Account',
+												value: 整个Account二进制 { 只有id: 传入的id }
+										} 
+									},
+								]
+				}
+			}
+
+
+			in inbound.go config, ctx:context.Background.WithValue(type core.V2rayKey, val <not Stringer>)  
+			config: user:{
+				account:{
+					type:"v2ray.core.proxy.vmess.Account"  
+					value:"\n$b831381d-6324-4d53-ad4f-8cda48b30811\x1a\x02\x08\x02"
+				}
+			}
+
+		*/
+		fmt.Printf("  in /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/vmess/inbound/inbound.go config, ctx:%+v  config:%+v\n", ctx, config)
 		return New(ctx, config.(*Config))
 	}))
 }

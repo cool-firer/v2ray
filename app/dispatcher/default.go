@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"fmt"
 
 	"v2ray.com/core"
 	"v2ray.com/core/common"
@@ -44,7 +45,7 @@ func (r *cachedReader) Cache(b *buf.Buffer) {
 	}
 	b.Clear()
 	rawBytes := b.Extend(buf.Size)
-	n := r.cache.Copy(rawBytes)
+	n := r.cache.Copy(rawBytes) // copy进rawBytes
 	b.Resize(0, int32(n))
 	r.Unlock()
 }
@@ -99,12 +100,22 @@ type DefaultDispatcher struct {
 
 func init() {
 	common.Must(common.RegisterConfig((*Config)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+		
+		// in default.go, ctx:context.Background.WithValue(type core.V2rayKey, val <not Stringer>)  config:
+		fmt.Printf("  in default.go, ctx:%+v  config:%+v\n", ctx, config)
 		d := new(DefaultDispatcher)
+
+		
 		if err := core.RequireFeatures(ctx, func(om outbound.Manager, router routing.Router, pm policy.Manager, sm stats.Manager) error {
+			
+			fmt.Println("Fuck Ass Code")
+			
 			return d.Init(config.(*Config), om, router, pm, sm)
 		}); err != nil {
 			return nil, err
 		}
+
+
 		return d, nil
 	}))
 }
@@ -132,8 +143,35 @@ func (*DefaultDispatcher) Start() error {
 func (*DefaultDispatcher) Close() error { return nil }
 
 func (d *DefaultDispatcher) getLink(ctx context.Context) (*transport.Link, *transport.Link) {
+	
+	// []Option: 一个函数
 	opt := pipe.OptionsFromContext(ctx)
+
+	/**
+		&Reader{
+			pipe: &pipe{
+				readSignal: &Notifier{
+					c: make(chan struct{}, 1),
+				},
+				writeSignal: &Notifier{
+					c: make(chan struct{}, 1),
+				},
+				done: 		&Instance{
+					c: make(chan struct{}),
+				},
+				option: pipeOption{
+					limit: -1,
+				},
+			},
+		}
+
+		&Writer{
+			pipe: 跟reader同一个p
+		}
+	*/
+
 	uplinkReader, uplinkWriter := pipe.New(opt...)
+
 	downlinkReader, downlinkWriter := pipe.New(opt...)
 
 	inboundLink := &transport.Link{
@@ -149,6 +187,7 @@ func (d *DefaultDispatcher) getLink(ctx context.Context) (*transport.Link, *tran
 	sessionInbound := session.InboundFromContext(ctx)
 	var user *protocol.MemoryUser
 	if sessionInbound != nil {
+		// &MemoryUser: { Level: 0 }
 		user = sessionInbound.User
 	}
 
@@ -188,6 +227,9 @@ func shouldOverride(result SniffResult, domainOverride []string) bool {
 
 // Dispatch implements routing.Dispatcher.
 func (d *DefaultDispatcher) Dispatch(ctx context.Context, destination net.Destination) (*transport.Link, error) {
+	
+	fmt.Println("    in Dispatch /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/dispatcher/default.go")
+	
 	if !destination.IsValid() {
 		panic("Dispatcher: Invalid destination.")
 	}
@@ -197,13 +239,40 @@ func (d *DefaultDispatcher) Dispatch(ctx context.Context, destination net.Destin
 	ctx = session.ContextWithOutbound(ctx, ob)
 
 	inbound, outbound := d.getLink(ctx)
+
+
 	content := session.ContentFromContext(ctx)
 	if content == nil {
 		content = new(session.Content)
 		ctx = session.ContextWithContent(ctx, content)
 	}
+
 	sniffingRequest := content.SniffingRequest
+	fmt.Println("    destination:", destination, " destination.Network:", destination.Network, " sniffingRequest:", sniffingRequest, " Enabled:", sniffingRequest.Enabled)
 	if destination.Network != net.Network_TCP || !sniffingRequest.Enabled {
+		/**
+			outbound: &transport.Link{
+				Reader: &Reader{
+									pipe: &pipe{
+									readSignal: &Notifier{
+										c: make(chan struct{}, 1),
+									},
+									writeSignal: &Notifier{
+										c: make(chan struct{}, 1),
+									},
+									done: 		&Instance{
+										c: make(chan struct{}),
+									},
+									option: pipeOption{
+										limit: -1,
+									},
+								},
+				},
+
+				Writer: downlinkWriter,
+			}
+		*/
+		// 连接到到目标的tcp, 开两个go后，阻塞等待两个go跑完 
 		go d.routedDispatch(ctx, outbound, destination)
 	} else {
 		go func() {
@@ -243,6 +312,9 @@ func sniffer(ctx context.Context, cReader *cachedReader) (SniffResult, error) {
 				return nil, errSniffingTimeout
 			}
 
+			// 1、重置payload start,end
+			// 2、把cReader.cache复制到payload里
+			// 3、根据实际复制的长度, 修正payload end索引
 			cReader.Cache(payload)
 			if !payload.IsEmpty() {
 				result, err := sniffer.Sniff(payload.Bytes())
@@ -262,9 +334,9 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 
 	skipRoutePick := false
 	if content := session.ContentFromContext(ctx); content != nil {
-		skipRoutePick = content.SkipRoutePick
+		skipRoutePick = content.SkipRoutePick // false
 	}
-
+	fmt.Println("[Sub]      routedDispatch d.router:", d.router, " skipRoutePick:", skipRoutePick)
 	if d.router != nil && !skipRoutePick {
 		if route, err := d.router.PickRoute(routing_session.AsRoutingContext(ctx)); err == nil {
 			tag := route.GetOutboundTag()
@@ -275,12 +347,15 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 				newError("non existing tag: ", tag).AtWarning().WriteToLog(session.ExportIDToError(ctx))
 			}
 		} else {
+			fmt.Println("[Sub]      default route for ", destination, " error")
 			newError("default route for ", destination).WriteToLog(session.ExportIDToError(ctx))
 		}
 	}
 
 	if handler == nil {
+		// 返回outbound.Manager的defaultHandler
 		handler = d.ohm.GetDefaultHandler()
+		// /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/outbound/outbound.go
 	}
 
 	if handler == nil {
@@ -297,5 +372,6 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 		log.Record(accessMessage)
 	}
 
+	//  /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/outbound/handler.go
 	handler.Dispatch(ctx, link)
 }

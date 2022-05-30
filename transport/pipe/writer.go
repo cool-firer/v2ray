@@ -1,6 +1,9 @@
 package pipe
 
 import (
+
+	"fmt"
+
 	"v2ray.com/core/common/buf"
 )
 
@@ -11,6 +14,7 @@ type Writer struct {
 
 // WriteMultiBuffer implements buf.Writer.
 func (w *Writer) WriteMultiBuffer(mb buf.MultiBuffer) error {
+	// buf.MultiBuffer是 []*Buffer的别名
 	return w.pipe.WriteMultiBuffer(mb)
 }
 
@@ -22,4 +26,8 @@ func (w *Writer) Close() error {
 // Interrupt implements common.Interruptible.
 func (w *Writer) Interrupt() {
 	w.pipe.Interrupt()
+}
+
+func (w *Writer) GetPipe() {
+	fmt.Println("pipe:", w.pipe)
 }

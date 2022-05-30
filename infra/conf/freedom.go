@@ -18,9 +18,21 @@ type FreedomConfig struct {
 }
 
 // Build implements Buildable
+/**
+	空的c
+*/
 func (c *FreedomConfig) Build() (proto.Message, error) {
+	// /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/config.proto proto结构体
 	config := new(freedom.Config)
 	config.DomainStrategy = freedom.Config_AS_IS
+
+	/**
+		/Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/config.proto proto结构体
+		此时的config: {
+			DomainStrategy: freedom.Config_AS_IS 枚举值,
+			UserLevel: 0,
+		}
+	*/
 	switch strings.ToLower(c.DomainStrategy) {
 	case "useip", "use_ip":
 		config.DomainStrategy = freedom.Config_USE_IP
@@ -33,6 +45,7 @@ func (c *FreedomConfig) Build() (proto.Message, error) {
 	if c.Timeout != nil {
 		config.Timeout = *c.Timeout
 	}
+
 	config.UserLevel = c.UserLevel
 	if len(c.Redirect) > 0 {
 		host, portStr, err := net.SplitHostPort(c.Redirect)

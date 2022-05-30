@@ -9,6 +9,7 @@ import (
 // OnSuccess executes g() after f() returns nil.
 func OnSuccess(f func() error, g func() error) func() error {
 	return func() error {
+		
 		if err := f(); err != nil {
 			return err
 		}
@@ -18,16 +19,23 @@ func OnSuccess(f func() error, g func() error) func() error {
 
 // Run executes a list of tasks in parallel, returns the first error encountered or nil if all tasks pass.
 func Run(ctx context.Context, tasks ...func() error) error {
-	n := len(tasks)
+	n := len(tasks) // 2
+
+	/**
+	&Instance{
+		token: make(chan struct{}, 2), 存两个空值
+	}
+	*/
 	s := semaphore.New(n)
+
 	done := make(chan error, 1)
 
 	for _, task := range tasks {
-		<-s.Wait()
+		<-s.Wait() // 尝试读取一个
 		go func(f func() error) {
 			err := f()
 			if err == nil {
-				s.Signal()
+				s.Signal() // 放个值
 				return
 			}
 

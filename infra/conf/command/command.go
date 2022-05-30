@@ -26,7 +26,10 @@ func (c *ConfigCommand) Description() control.Description {
 	}
 }
 
+// [ /Users/demon/Desktop/work/gowork/src/v2ray.com/core/main/config.json ]
 func (c *ConfigCommand) Execute(args []string) error {
+
+	// os.Stdin不用从标准输入读吧?
 	pbConfig, err := serial.LoadJSONConfig(os.Stdin)
 	if err != nil {
 		return newError("failed to parse json config").Base(err)

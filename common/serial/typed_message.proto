@@ -11,5 +11,5 @@ message TypedMessage {
   // The name of the message type, retrieved from protobuf API.
   string type = 1;
   // Serialized proto message.
-  bytes value = 2;
+  bytes value = 2; // 对应go的 []byte
 }

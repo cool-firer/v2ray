@@ -75,6 +75,7 @@ func NewTimedUserValidator(hasher protocol.IDHash) *TimedUserValidator {
 func (v *TimedUserValidator) generateNewHashes(nowSec protocol.Timestamp, user *user) {
 	var hashValue [16]byte
 	genEndSec := nowSec + cacheDurationSec
+
 	genHashForID := func(id *protocol.ID) {
 		idHash := v.hasher(id.Bytes())
 		genBeginSec := user.lastSec
@@ -127,6 +128,33 @@ func (v *TimedUserValidator) updateUserHash() {
 	}
 }
 
+
+/**
+
+			clients: &TimedUserValidator{
+				users: [
+					&user{
+						user:    *u,
+						lastSec: protocol.Timestamp(nowSec - cacheDurationSec),
+					},
+				],
+				userHash: make(map[[16]byte]indexTimePair, 1024),
+				hasher:            一个func: protocol.DefaultIDHash,
+				baseTime:          protocol.Timestamp(time.Now().Unix() - cacheDurationSec*2),
+				aeadDecoderHolder: aead.NewAuthIDDecoderHolder(),
+			},
+
+			mUser = &MemoryUser{
+				Account: &vmess.Account{
+					Id: 'b831381d-6324-4d53-ad4f-8cda48b30811',
+					AlterId: 0,
+					securitySettings: &protocol.SecurityConfig{ Type: 'AUTO' }
+				},
+				Email:   ''
+				Level:   0
+			}
+*/
+
 func (v *TimedUserValidator) Add(u *protocol.MemoryUser) error {
 	v.Lock()
 	defer v.Unlock()
@@ -138,6 +166,8 @@ func (v *TimedUserValidator) Add(u *protocol.MemoryUser) error {
 		lastSec: protocol.Timestamp(nowSec - cacheDurationSec),
 	}
 	v.users = append(v.users, uu)
+
+	// 填充 userHash字段
 	v.generateNewHashes(protocol.Timestamp(nowSec), uu)
 
 	account := uu.user.Account.(*MemoryAccount)

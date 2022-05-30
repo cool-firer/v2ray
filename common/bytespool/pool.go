@@ -18,18 +18,25 @@ const (
 )
 
 var (
-	pool     [numPools]sync.Pool
-	poolSize [numPools]int32
+	pool     [numPools]sync.Pool // 4个pool
+	poolSize [numPools]int32 // 4个pool对应的Size
 )
 
 func init() {
 	size := int32(2048)
 	for i := 0; i < numPools; i++ {
 		pool[i] = sync.Pool{
+			/**
+				func createAllocFunc(size int32) func() interface{} {
+					return func() interface{} {
+						return make([]byte, size)
+					}
+				}
+			*/
 			New: createAllocFunc(size),
 		}
 		poolSize[i] = size
-		size *= sizeMulti
+		size *= sizeMulti // 2048、2048*4、2048*4*4、2048*4*4*4
 	}
 }
 

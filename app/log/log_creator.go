@@ -35,6 +35,7 @@ func createHandler(logType LogType, options HandlerCreatorOptions) (log.Handler,
 }
 
 func init() {
+	// 	Path: g.config.ErrorLogPath,
 	common.Must(RegisterHandlerCreator(LogType_Console, func(lt LogType, options HandlerCreatorOptions) (log.Handler, error) {
 		return log.NewLogger(log.CreateStdoutLogWriter()), nil
 	}))

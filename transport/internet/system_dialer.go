@@ -4,6 +4,7 @@ import (
 	"context"
 	"syscall"
 	"time"
+	"fmt"
 
 	"v2ray.com/core/common/net"
 	"v2ray.com/core/common/session"
@@ -66,6 +67,7 @@ func (d *DefaultSystemDialer) Dial(ctx context.Context, src net.Address, dest ne
 		}, nil
 	}
 
+	// 源生net  Dialer contains options for connecting to an address
 	dialer := &net.Dialer{
 		Timeout:   time.Second * 16,
 		DualStack: true,
@@ -95,6 +97,9 @@ func (d *DefaultSystemDialer) Dial(ctx context.Context, src net.Address, dest ne
 		}
 	}
 
+	// DialContext connects to the address on the named network using the provided context.
+	fmt.Println("to dial netword:", dest.Network.SystemString(), " address:", dest.NetAddr(), " /Users/demon/Desktop/work/gowork/src/v2ray.com/core/transport/internet/system_dialer.go")
+	// 开始连接到目标
 	return dialer.DialContext(ctx, dest.Network.SystemString(), dest.NetAddr())
 }
 
@@ -151,6 +156,7 @@ func WithAdapter(dialer SystemDialerAdapter) SystemDialer {
 }
 
 func (v *SimpleSystemDialer) Dial(ctx context.Context, src net.Address, dest net.Destination, sockopt *SocketConfig) (net.Conn, error) {
+	
 	return v.adapter.Dial(dest.Network.SystemString(), dest.NetAddr())
 }
 

@@ -2,6 +2,7 @@ package pipe
 
 import (
 	"time"
+	"fmt"
 
 	"v2ray.com/core/common/buf"
 )
@@ -24,4 +25,8 @@ func (r *Reader) ReadMultiBufferTimeout(d time.Duration) (buf.MultiBuffer, error
 // Interrupt implements common.Interruptible.
 func (r *Reader) Interrupt() {
 	r.pipe.Interrupt()
+}
+
+func (r *Reader) GetPipe() {
+	fmt.Println("pipe:", r.pipe)
 }

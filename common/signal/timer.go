@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"time"
+	"fmt"
 
 	"v2ray.com/core/common"
 	"v2ray.com/core/common/task"
@@ -41,8 +42,9 @@ func (t *ActivityTimer) finish() {
 	defer t.Unlock()
 
 	if t.onTimeout != nil {
+		fmt.Println("fuck Timer i'm finished")
 		t.onTimeout()
-		t.onTimeout = nil
+		t.onTimeout = nil // 养成好习惯?
 	}
 	if t.checkTask != nil {
 		t.checkTask.Close() // nolint: errcheck
@@ -51,6 +53,8 @@ func (t *ActivityTimer) finish() {
 }
 
 func (t *ActivityTimer) SetTimeout(timeout time.Duration) {
+	
+	// 当前为0, 马上结束
 	if timeout == 0 {
 		t.finish()
 		return
@@ -68,7 +72,8 @@ func (t *ActivityTimer) SetTimeout(timeout time.Duration) {
 	}
 	t.checkTask = checkTask
 	t.Unlock()
-	t.Update()
+	t.Update() // 放个值进去
+
 	common.Must(checkTask.Start())
 }
 

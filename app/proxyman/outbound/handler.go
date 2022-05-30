@@ -2,6 +2,7 @@ package outbound
 
 import (
 	"context"
+	"fmt"
 
 	"v2ray.com/core"
 	"v2ray.com/core/app/proxyman"
@@ -57,24 +58,69 @@ type Handler struct {
 }
 
 // NewHandler create a new Handler based on the given configuration.
+/**
+
+			SenderSettings: {
+				type: 'v2ray.core.app.proxyman.SenderConfig',
+				value: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto 空的proto结构体
+			},
+			tag: '',
+			ProxySettings: {
+				type: 'v2ray.core.proxy.freedom.Config',
+				value: {  /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/config.proto proto结构体
+					DomainStrategy: freedom.Config_AS_IS 枚举值,
+					UserLevel: 0,
+				}
+			}
+
+*/
 func NewHandler(ctx context.Context, config *core.OutboundHandlerConfig) (outbound.Handler, error) {
 	v := core.MustFromContext(ctx)
 	uplinkCounter, downlinkCounter := getStatCounter(v, config.Tag)
 	h := &Handler{
-		tag:             config.Tag,
-		outboundManager: v.GetFeature(outbound.ManagerType()).(outbound.Manager),
-		uplinkCounter:   uplinkCounter,
-		downlinkCounter: downlinkCounter,
+		tag:             config.Tag, // ''
+		outboundManager: v.GetFeature(outbound.ManagerType()).(outbound.Manager), // 指回server的outbound属性
+		uplinkCounter:   uplinkCounter, // 空
+		downlinkCounter: downlinkCounter, // 空
 	}
 
 	if config.SenderSettings != nil {
-		senderSettings, err := config.SenderSettings.GetInstance()
+		/**
+
+		in outbound/handler.go, config.SenderSettings not nil,  
+		config:
+			sender_settings:{
+				type:"v2ray.core.app.proxyman.SenderConfig"
+			} 
+			proxy_settings:{
+				type:"v2ray.core.proxy.freedom.Config"
+			}	  
+
+		config.SenderSettings:
+			type:"v2ray.core.app.proxyman.SenderConfig"
+		*/
+
+		fmt.Printf("  in outbound/handler.go, config.SenderSettings not nil,  config:%+v  config.SenderSettings:%+v\n", config, config.SenderSettings)
+		senderSettings, err := config.SenderSettings.GetInstance() // 空的proto结构体
 		if err != nil {
 			return nil, err
 		}
 		switch s := senderSettings.(type) {
 		case *proxyman.SenderConfig:
 			h.senderSettings = s
+
+			// 跟inbound一样, tcp
+			/**
+			mss: 
+ 			&MemoryStreamConfig{
+				ProtocolName: 'tcp'
+				ProtocolSettings: 空的Config struct{
+					new了一个空的Config: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/transport/internet/tcp/config.pb.go
+					HeaderSettings      *serial.TypedMessage `protobuf:"bytes,2,opt,name=header_settings,json=headerSettings,proto3" json:"header_settings,omitempty"`
+					AcceptProxyProtocol bool                 `protobuf:"varint,3,opt,name=accept_proxy_protocol,json=acceptProxyProtocol,proto3" json:"accept_proxy_protocol,omitempty"`
+				},
+			}
+			*/
 			mss, err := internet.ToMemoryStreamConfig(s.StreamSettings)
 			if err != nil {
 				return nil, newError("failed to parse stream settings").Base(err).AtWarning()
@@ -85,11 +131,40 @@ func NewHandler(ctx context.Context, config *core.OutboundHandlerConfig) (outbou
 		}
 	}
 
+	/**
+		此时的h:
+		h := &Handler{
+			tag: '',
+			outboundManager: 指回server里features的outbound.Manager属性
+			uplinkCounter: 空接口值
+			downlinkCounter: 空接口值
+			senderSettings: v2ray.core.app.proxyman.SenderConfig 空的proto结构体,
+			streamSettings: &MemoryStreamConfig{
+				ProtocolName: 'tcp'
+				ProtocolSettings: 空的Config struct{
+					new了一个空的Config: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/transport/internet/tcp/config.pb.go
+					HeaderSettings      *serial.TypedMessage `protobuf:"bytes,2,opt,name=header_settings,json=headerSettings,proto3" json:"header_settings,omitempty"`
+					AcceptProxyProtocol bool                 `protobuf:"varint,3,opt,name=accept_proxy_protocol,json=acceptProxyProtocol,proto3" json:"accept_proxy_protocol,omitempty"`
+				},
+			}
+		}
+	*/
+
+
 	proxyConfig, err := config.ProxySettings.GetInstance()
 	if err != nil {
 		return nil, err
 	}
 
+	/**
+		rawProxyHandler: 空值
+		type Handler struct {
+			policyManager policy.Manager: 指向features里的同类型
+			dns           dns.Client: 指向features里的同类型
+			config        *Config:  空的config
+			/Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/freedom.go
+		}
+	*/
 	rawProxyHandler, err := common.CreateObject(ctx, proxyConfig)
 	if err != nil {
 		return nil, err
@@ -100,7 +175,9 @@ func NewHandler(ctx context.Context, config *core.OutboundHandlerConfig) (outbou
 		return nil, newError("not an outbound handler")
 	}
 
+	// h.senderSettings不nil,  但MultiplexSettings肯定是nil
 	if h.senderSettings != nil && h.senderSettings.MultiplexSettings != nil {
+		fmt.Printf("in outbound/handler.go, senderSettings:%+v  h.senderSettings.MultiplexSettings:%+v\n", h.senderSettings, h.senderSettings.MultiplexSettings)
 		config := h.senderSettings.MultiplexSettings
 		if config.Concurrency < 1 || config.Concurrency > 1024 {
 			return nil, newError("invalid mux concurrency: ", config.Concurrency).AtWarning()
@@ -119,7 +196,33 @@ func NewHandler(ctx context.Context, config *core.OutboundHandlerConfig) (outbou
 			},
 		}
 	}
+	
+	/**
+		此时的h:
+		h := &Handler{
+			tag: '',
+			outboundManager: 指回server里features的outbound.Manager属性
+			uplinkCounter: 空接口值
+			downlinkCounter: 空接口值
+			senderSettings: v2ray.core.app.proxyman.SenderConfig 空的proto结构体,
+			streamSettings: &MemoryStreamConfig{
+				ProtocolName: 'tcp'
+				ProtocolSettings: 空的Config struct{
+					new了一个空的Config: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/transport/internet/tcp/config.pb.go
+					HeaderSettings      *serial.TypedMessage `protobuf:"bytes,2,opt,name=header_settings,json=headerSettings,proto3" json:"header_settings,omitempty"`
+					AcceptProxyProtocol bool                 `protobuf:"varint,3,opt,name=accept_proxy_protocol,json=acceptProxyProtocol,proto3" json:"accept_proxy_protocol,omitempty"`
+				},
+			},
 
+			proxy: &Handler struct {
+				policyManager policy.Manager: 指向features里的同类型
+				dns           dns.Client: 指向features里的同类型
+				config        *Config:  空的config
+				/Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/freedom.go
+			},
+		}
+	*/
+	
 	h.proxy = proxyHandler
 	return h, nil
 }
@@ -131,19 +234,26 @@ func (h *Handler) Tag() string {
 
 // Dispatch implements proxy.Outbound.Dispatch.
 func (h *Handler) Dispatch(ctx context.Context, link *transport.Link) {
+	fmt.Println("[Sub]        Dispatch /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/outbound/handler.go")
 	if h.mux != nil && (h.mux.Enabled || session.MuxPreferedFromContext(ctx)) {
 		if err := h.mux.Dispatch(ctx, link); err != nil {
 			newError("failed to process mux outbound traffic").Base(err).WriteToLog(session.ExportIDToError(ctx))
 			common.Interrupt(link.Writer)
 		}
 	} else {
+		fmt.Println("[Sub]        in else")
+		// /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/freedom.go
 		if err := h.proxy.Process(ctx, link, h); err != nil {
 			// Ensure outbound ray is properly closed.
 			newError("failed to process outbound traffic").Base(err).WriteToLog(session.ExportIDToError(ctx))
+			
+			fmt.Println("[Sub] gorotine returned with err:", err, " Interrupt Witer")
 			common.Interrupt(link.Writer)
 		} else {
+			fmt.Println("[Sub] gorotine returned, Close Writer")
 			common.Must(common.Close(link.Writer))
 		}
+		// fmt.Println("[freedom] Interrupt Reader")
 		common.Interrupt(link.Reader)
 	}
 }
@@ -158,8 +268,10 @@ func (h *Handler) Address() net.Address {
 
 // Dial implements internet.Dialer.
 func (h *Handler) Dial(ctx context.Context, dest net.Destination) (internet.Connection, error) {
+	fmt.Println("          in Dial /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/outbound/handler.go")
 	if h.senderSettings != nil {
 		if h.senderSettings.ProxySettings.HasTag() {
+			fmt.Println("          has Tag")
 			tag := h.senderSettings.ProxySettings.Tag
 			handler := h.outboundManager.GetHandler(tag)
 			if handler != nil {
@@ -187,6 +299,7 @@ func (h *Handler) Dial(ctx context.Context, dest net.Destination) (internet.Conn
 		}
 
 		if h.senderSettings.Via != nil {
+			fmt.Println("          Via not nil")
 			outbound := session.OutboundFromContext(ctx)
 			if outbound == nil {
 				outbound = new(session.Outbound)

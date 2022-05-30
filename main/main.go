@@ -2,6 +2,18 @@ package main
 
 //go:generate go run v2ray.com/core/common/errors/errorgen
 
+// env CGO_ENABLED=0 go build -o ./v2ray -ldflags "-s -w"
+//  ./v2ray --config=./config.json
+
+// cd $(go env GOPATH)/src/v2ray.com/core/infra/control/main
+// env CGO_ENABLED=0 go build -o $HOME/v2ctl -tags confonly -ldflags "-s -w"
+
+
+/**
+	不优化build: env CGO_ENABLED=0 go build -gcflags="all=-N -l" -o ./v2ray
+	调试:	dlv exec ./v2ray -- -config ./config.json
+*/
+
 import (
 	"flag"
 	"fmt"
@@ -99,7 +111,7 @@ func getConfigFilePath() (cmdarg.Arg, error) {
 }
 
 func GetConfigFormat() string {
-	switch strings.ToLower(*format) {
+	switch strings.ToLower(*format) { // 默认json
 	case "pb", "protobuf":
 		return "protobuf"
 	default:
@@ -108,15 +120,106 @@ func GetConfigFormat() string {
 }
 
 func startV2Ray() (core.Server, error) {
+
+	// configFiles string数组 配置文件路径 [ ./config.json ]
 	configFiles, err := getConfigFilePath()
 	if err != nil {
 		return nil, err
 	}
 
+	// GetConfigFormat(): 默认 'json'
+	
+
+	// 调用了v2ctl，读取config.json, 输出到stdout
+/** 此时的 pbConfig /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto proto结构体
+	{
+		App: [
+
+			&TypedMessage { 
+				Type: 'v2ray.core.app.log.Config',
+				value: &log.Config {  value的值被marshal成了[]byte  proto结构体
+					AccessLogType: None(0)
+					ErrorLogType: Console(1)
+					ErrorLogLevel: Warning(2)
+				}
+			},
+
+			{
+				type: 'v2ray.core.app.dispatcher.Config',    
+				value: &dispatcher.Config{} proto.Marshal编码成[]byte  
+			},
+
+			{
+				type: 'v2ray.core.app.proxyman.InboundConfig',    
+				value: &proxyman.InboundConfig{}
+			},
+
+			{
+				type: 'v2ray.core.app.proxyman.OutboundConfig',    
+				value: &proxyman.OutboundConfig{}
+			},
+		],
+
+		Inbound: [
+
+			&core.InboundHandlerConfig{ proto生成的结构体: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto
+				Tag: '',
+				ReceiverSettings: &TypedMessage{
+					Type: "v2ray.core.app.proxyman.ReceiverConfig",
+					Value: &proxyman.ReceiverConfig{
+						PortRange: &net.PortRange{ From: 10086, To: 10086 }
+					}
+				},
+				ProxySettings: &TypedMessage{
+					Type: 'v2ray.core.proxy.vmess.inbound.Config',
+					Value: &inbound.Config{
+						SecureEncryptionOnly: false,
+						User: [
+
+							protocol.User{
+								Account: &TypedMessage:{
+									Type: 'v2ray.core.proxy.vemss.Account',
+									Value: &vmess.Account{
+										Id: "b831381d-6324-4d53-ad4f-8cda48b30811",
+										AlterId: 0,
+										SecuritySettings: &protocol.SecurityConfig{ Type: AUTO }
+									}
+								}
+							}
+
+						]
+					}
+				}
+			}
+
+		],
+
+		Outbound: [
+			&core.OutboundHandlerConfig{  /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto 生成的结构体
+				Tag: '',
+				SenderSettings: &TypedMessage{
+					Type: 'v2ray.core.app.proxyman.SenderConfig',
+					Value: &proxyman.SenderConfig{}
+				}
+				ProxySettings: &TypedMessage{
+					Type: 'v2ray.core.proxy.freedom.Config',
+					Value: &freedom.Config{
+						DomainStrategy: freedom.Config_AS_IS 枚举值,
+						UserLevel: 0,
+					}
+				}
+			}
+		]
+	}
+**/
+
+	// GetConfigFormat(): 'json'
 	config, err := core.LoadConfig(GetConfigFormat(), configFiles[0], configFiles)
 	if err != nil {
 		return nil, newError("failed to read config files: [", configFiles.String(), "]").Base(err)
 	}
+
+	// fmt.Printf("++config:%+v\n", config)
 
 	server, err := core.New(config)
 	if err != nil {
@@ -134,6 +237,9 @@ func printVersion() {
 }
 
 func main() {
+
+	// v2ray --config=./config.json
+	fmt.Println("I am coming")
 
 	flag.Parse()
 

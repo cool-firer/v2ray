@@ -39,11 +39,11 @@ func getControlFunc(ctx context.Context, sockopt *SocketConfig, controllers []co
 }
 
 func (dl *DefaultListener) Listen(ctx context.Context, addr net.Addr, sockopt *SocketConfig) (net.Listener, error) {
-	var lc net.ListenConfig
+	var lc net.ListenConfig // 内置包的 net.ListenConfig
 
-	lc.Control = getControlFunc(ctx, sockopt, dl.controllers)
+	lc.Control = getControlFunc(ctx, sockopt, dl.controllers) // 目测是空的 []
 
-	return lc.Listen(ctx, addr.Network(), addr.String())
+	return lc.Listen(ctx, addr.Network(), addr.String()) // 内置包的 Listen方法, 开启监听了, 返回 Listner
 }
 
 func (dl *DefaultListener) ListenPacket(ctx context.Context, addr net.Addr, sockopt *SocketConfig) (net.PacketConn, error) {

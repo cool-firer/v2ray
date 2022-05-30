@@ -7,6 +7,7 @@ package command
 import (
 	"context"
 
+	"fmt"
 	grpc "google.golang.org/grpc"
 
 	"v2ray.com/core"
@@ -47,6 +48,7 @@ func (s *service) Register(server *grpc.Server) {
 
 func init() {
 	common.Must(common.RegisterConfig((*Config)(nil), func(ctx context.Context, cfg interface{}) (interface{}, error) {
+		fmt.Printf("in core.app.log.common log.go, ctx:%+v  config:%+v\n", ctx, cfg)
 		s := core.MustFromContext(ctx)
 		return &service{v: s}, nil
 	}))

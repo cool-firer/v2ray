@@ -68,7 +68,7 @@ func (mb MultiBuffer) Copy(b []byte) int {
 	for _, bb := range mb {
 		nBytes := copy(b[total:], bb.Bytes())
 		total += nBytes
-		if int32(nBytes) < bb.Len() {
+		if int32(nBytes) < bb.Len() { //
 			break
 		}
 	}

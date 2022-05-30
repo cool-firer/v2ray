@@ -41,14 +41,20 @@ func findOffset(b []byte, o int) *offset {
 // DecodeJSONConfig reads from reader and decode the config into *conf.Config
 // syntax error could be detected.
 func DecodeJSONConfig(reader io.Reader) (*conf.Config, error) {
-	jsonConfig := &conf.Config{}
+	jsonConfig := &conf.Config{} // json结构体
 
+	// /创建一个初始元素长度为0的数组切片，元素初始值为0，并预留10240个元素的存储空间： 
 	jsonContent := bytes.NewBuffer(make([]byte, 0, 10240))
+
+	// func TeeReader(r Reader, w Writer) Reader  读出来的写入到w
 	jsonReader := io.TeeReader(&json_reader.Reader{
 		Reader: reader,
 	}, jsonContent)
+
+
 	decoder := json.NewDecoder(jsonReader)
 
+	// 从jsonReader读内容, 复制一份到jsonContent
 	if err := decoder.Decode(jsonConfig); err != nil {
 		var pos *offset
 		cause := errors.Cause(err)
@@ -63,7 +69,6 @@ func DecodeJSONConfig(reader io.Reader) (*conf.Config, error) {
 		}
 		return nil, newError("failed to read config file").Base(err)
 	}
-
 	return jsonConfig, nil
 }
 

@@ -2,6 +2,7 @@ package buf
 
 import (
 	"io"
+	"fmt"
 
 	"v2ray.com/core/common"
 	"v2ray.com/core/common/errors"
@@ -26,11 +27,25 @@ func readOneUDP(r io.Reader) (*Buffer, error) {
 
 // ReadBuffer reads a Buffer from the given reader.
 func ReadBuffer(r io.Reader) (*Buffer, error) {
+
+	/**
+	&Buffer{
+		v: pool.Get().([]byte), // 从初始长度2048的pool里取一个
+	}
+	*/
 	b := New()
-	n, err := b.ReadFrom(r)
+
+	// 这里会阻塞
+	// 调用原生: reader.Read(b.v[b.end:]), 读进内部[]
+	// fmt.Println("[ClientConn] b.ReadFrom ...")
+	n, err := b.ReadFrom(r) // b.v[b.end:]
+	// fmt.Print("[ClientConn] b.ReadFrom returned, cur b.end:", b.end, "\n\n")
+
+	// 读到了数据, 返回
 	if n > 0 {
 		return b, err
 	}
+
 	b.Release()
 	return nil, err
 }
@@ -101,6 +116,7 @@ func (r *BufferedReader) ReadAtMost(size int32) (MultiBuffer, error) {
 	if r.Buffer.IsEmpty() {
 		mb, err := r.Reader.ReadMultiBuffer()
 		if mb.IsEmpty() && err != nil {
+			fmt.Println("hahahah")
 			return nil, err
 		}
 		r.Buffer = mb

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"fmt"
 
 	"v2ray.com/core/app/proxyman"
 	"v2ray.com/core/common"
@@ -55,10 +56,15 @@ func getTProxyType(s *internet.MemoryStreamConfig) internet.SocketConfig_TProxyM
 }
 
 func (w *tcpWorker) callback(conn internet.Connection) {
-	ctx, cancel := context.WithCancel(w.ctx)
-	sid := session.NewID()
-	ctx = session.ContextWithID(ctx, sid)
 
+	fmt.Println("tcpWroker callback ctx:", w.ctx)
+
+	ctx, cancel := context.WithCancel(w.ctx)
+
+	sid := session.NewID() // 一个随机的u32数
+	ctx = session.ContextWithID(ctx, sid) // 
+
+	// false
 	if w.recvOrigDest {
 		var dest net.Destination
 		switch getTProxyType(w.stream) {
@@ -79,16 +85,21 @@ func (w *tcpWorker) callback(conn internet.Connection) {
 		}
 	}
 	ctx = session.ContextWithInbound(ctx, &session.Inbound{
-		Source:  net.DestinationFromAddr(conn.RemoteAddr()),
-		Gateway: net.TCPDestination(w.address, w.port),
-		Tag:     w.tag,
+		Source:  net.DestinationFromAddr(conn.RemoteAddr()), // 对端的ip port
+		Gateway: net.TCPDestination(w.address, w.port), // 当前监听的ip port
+		Tag:     w.tag, // ''
 	})
 	content := new(session.Content)
+
+	// nil
 	if w.sniffingConfig != nil {
 		content.SniffingRequest.Enabled = w.sniffingConfig.Enabled
 		content.SniffingRequest.OverrideDestinationForProtocol = w.sniffingConfig.DestinationOverride
 	}
+
 	ctx = session.ContextWithContent(ctx, content)
+
+	// 两个都是nil
 	if w.uplinkCounter != nil || w.downlinkCounter != nil {
 		conn = &internet.StatCouterConnection{
 			Connection:   conn,
@@ -96,22 +107,63 @@ func (w *tcpWorker) callback(conn internet.Connection) {
 			WriteCounter: w.downlinkCounter,
 		}
 	}
+
+	// protocol: http  /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/http/server.go
+	// protocol: socks /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/socks/server.go
 	if err := w.proxy.Process(ctx, net.Network_TCP, conn, w.dispatcher); err != nil {
 		newError("connection ends").Base(err).WriteToLog(session.ExportIDToError(ctx))
 	}
+
 	cancel()
+
 	if err := conn.Close(); err != nil {
 		newError("failed to close connection").Base(err).WriteToLog(session.ExportIDToError(ctx))
 	}
+
 }
 
 func (w *tcpWorker) Proxy() proxy.Inbound {
 	return w.proxy
 }
 
+/**
+										&tcpWorker{ 在 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/inbound/worker.go
+											address:   address,
+											port:     net.Port(port), // 10086
+											proxy:    &Handler{
+												policyManager:         v.GetFeature(policy.ManagerType()).(policy.Manager),
+												inboundHandlerManager: v.GetFeature(feature_inbound.ManagerType()).(feature_inbound.Manager),
+												clients:               vmess.NewTimedUserValidator(protocol.DefaultIDHash), ==> 有mUser, mUser里有account
+												detours:               config.Detour,
+												usersByEmail:          newUserByEmail(config.GetDefaultValue()),
+												sessionHistory:        encoding.NewSessionHistory(),
+												secure:                config.SecureEncryptionOnly,
+											}
+											stream:          mss,
+											recvOrigDest:    receiverConfig.ReceiveOriginalDestination, // 默认值
+											tag:             tag, // ''
+											dispatcher:      h.mux,
+											sniffingConfig:  receiverConfig.GetEffectiveSniffingSettings(), // nil
+											uplinkCounter:   uplinkCounter, // 空的
+											downlinkCounter: downlinkCounter, // 空的
+											ctx:             ctx,
+										}
+*/
 func (w *tcpWorker) Start() error {
 	ctx := context.Background()
+
+	// ListenTCP在 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/transport/internet/tcp/hub.go
+/**
+		listen监听 => go一个Accept 之后返回l
+		hub = l = &Listener{
+			listener: listener, // 原生的 net.Listener
+			config:   tcpSettings, // 空的结构体
+			addConn:  handler, // 回调
+		}
+*/
 	hub, err := internet.ListenTCP(ctx, w.address, w.port, w.stream, func(conn internet.Connection) {
+		// 果然, 常规, 每来一个conn就起一个go
+		fmt.Println("connection coming")
 		go w.callback(conn)
 	})
 	if err != nil {

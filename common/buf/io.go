@@ -6,6 +6,7 @@ import (
 	"os"
 	"syscall"
 	"time"
+	"fmt"
 )
 
 // Reader extends io.Reader with MultiBuffer.
@@ -30,12 +31,13 @@ type Writer interface {
 
 // WriteAllBytes ensures all bytes are written into the given writer.
 func WriteAllBytes(writer io.Writer, payload []byte) error {
+	// 循环写入
 	for len(payload) > 0 {
 		n, err := writer.Write(payload)
 		if err != nil {
 			return err
 		}
-		payload = payload[n:]
+		payload = payload[n:] // reset
 	}
 	return nil
 }
@@ -49,10 +51,12 @@ func isPacketReader(reader io.Reader) bool {
 // The Reader instance doesn't take the ownership of reader.
 func NewReader(reader io.Reader) Reader {
 	if mr, ok := reader.(Reader); ok {
+		fmt.Println("is reader.(Reader)")
 		return mr
 	}
 
 	if isPacketReader(reader) {
+		fmt.Println("is isPacketReader)")
 		return &PacketReader{
 			Reader: reader,
 		}
@@ -60,16 +64,28 @@ func NewReader(reader io.Reader) Reader {
 
 	_, isFile := reader.(*os.File)
 	if !isFile && useReadv {
+		// fmt.Println("!isFile && useReadv => true")
+
+		// TCPConn实现了syscall.Conn接口
 		if sc, ok := reader.(syscall.Conn); ok {
+
+			/**
+				动态值: type rawConn struct {
+								fd *netFD
+							}	
+			*/
 			rawConn, err := sc.SyscallConn()
 			if err != nil {
 				newError("failed to get sysconn").Base(err).WriteToLog()
 			} else {
+
+				// fmt.Println("is NewReadVReader)")
 				return NewReadVReader(reader, rawConn)
 			}
 		}
 	}
 
+	// fmt.Println("is SingleReader)")
 	return &SingleReader{
 		Reader: reader,
 	}

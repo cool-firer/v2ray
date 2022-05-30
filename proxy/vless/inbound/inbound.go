@@ -39,6 +39,7 @@ var (
 
 func init() {
 	common.Must(common.RegisterConfig((*Config)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+
 		var dc dns.Client
 		if err := core.RequireFeatures(ctx, func(d dns.Client) error {
 			dc = d

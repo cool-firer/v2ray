@@ -14,10 +14,82 @@ import (
 
 // CreateObject creates a new object based on the given V2Ray instance and config. The V2Ray instance may be nil.
 func CreateObject(v *Instance, config interface{}) (interface{}, error) {
+	// 奇怪的代码
 	ctx := v.ctx
 	if v != nil {
+		// v2rayKey: 1
 		ctx = context.WithValue(ctx, v2rayKey, v)
 	}
+
+	/**
+		Type: v2ray.core.app.log.Config, settings: error_log_type:Console error_log_level:Warning
+		config proto结构体:
+		{
+			error_log_type: Console,
+			error_log_level: Warning
+		}
+
+		Type: v2ray.core.app.dispatcher.Config, settings: 空的
+		config proto结构体
+
+		Type: v2ray.core.app.proxyman.InboundConfig, settings: 空的
+		config proto结构体
+
+		Type: v2ray.core.app.proxyman.InboundConfig settings: 空
+		config proto结构体
+	  返回 m := &Manager{
+		taggedHandlers: make(map[string]inbound.Handler),
+		}
+
+		Type: v2ray.core.app.proxyman.OutboundConfig settings: 空
+		config proto结构体
+
+
+	config:
+	core.InboundHandlerConfig proto生成的结构体: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto
+	{
+			Tag: ''
+			ReceiverSettings: {
+					type:"v2ray.core.app.proxyman.ReceiverConfig",
+
+					value是 proto结构体 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
+					value: { 
+						PortRange: net.PortRange proto结构体 10086
+					}
+			},
+			ProxySettings: {
+				type: 'v2ray.core.proxy.vmess.inbound.Config',
+				value:  最终的config(proto生成的结构体): {
+								SecureEncryptionOnly: false
+								User: [
+									proto生成的protocol.User结构体 {
+										Account: {
+												type: 'v2ray.core.proxy.vemss.Account',
+												value: 整个Account二进制 { 只有id: 传入的id }
+										} 
+									},
+								]
+				}
+			}
+	}
+
+	core.OutboundHandlerConfig: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto 生成的结构体
+	{
+			SenderSettings: {
+				type: 'v2ray.core.app.proxyman.SenderConfig',
+				value: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto 空的proto结构体
+			},
+			tag: '',
+			ProxySettings: {
+				type: 'v2ray.core.proxy.freedom.Config',
+				value: {  /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/config.proto proto结构体
+					DomainStrategy: freedom.Config_AS_IS 枚举值,
+					UserLevel: 0,
+				}
+			}
+	}
+
+	*/
 	return common.CreateObject(ctx, config)
 }
 

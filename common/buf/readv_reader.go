@@ -6,6 +6,7 @@ import (
 	"io"
 	"runtime"
 	"syscall"
+	"fmt"
 
 	"v2ray.com/core/common/platform"
 )
@@ -118,13 +119,31 @@ func (r *ReadVReader) readMulti() (MultiBuffer, error) {
 
 // ReadMultiBuffer implements Reader.
 func (r *ReadVReader) ReadMultiBuffer() (MultiBuffer, error) {
+	/**
+	 	&ReadVReader{
+			Reader:  客户端conn的抽象io.Reader接口,
+			rawConn: conn.(syscall.Conn)拿到原始Conn, 为什么要拿到原始的, 原始的是有fd的
+			alloc: allocStrategy{
+				current: 1,
+			},
+			mr: newMultiReader(),
+		}
+	*/
+	// fmt.Println("[ClientConn] ReadVReader ReadMultiBuffer r.alloc.Current():", r.alloc.Current(), " ...")
+	// 1
 	if r.alloc.Current() == 1 {
+
+		// 会阻塞, 调用原生: reader.Read(b.v[b.end:]), 读进内部[]
 		b, err := ReadBuffer(r.Reader)
-		if b.IsFull() {
-			r.alloc.Adjust(1)
+		// fmt.Println("[ClientConn] ReadVReader ReadMultiBuffer returned, b:", b.String())
+
+		if b.IsFull() { // 如果占满了b.v
+			r.alloc.Adjust(1) // current调成原来的四倍, 不超过32
 		}
 		return MultiBuffer{b}, err
 	}
+
+	fmt.Println("ReadVReader r.alloc.Current():", r.alloc.Current())
 
 	mb, err := r.readMulti()
 	if err != nil {

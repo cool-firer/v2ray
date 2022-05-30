@@ -5,6 +5,7 @@ package inbound
 import (
 	"context"
 	"sync"
+	"fmt"
 
 	"v2ray.com/core"
 	"v2ray.com/core/app/proxyman"
@@ -135,10 +136,59 @@ func (m *Manager) Close() error {
 
 // NewHandler creates a new inbound.Handler based on the given config.
 func NewHandler(ctx context.Context, config *core.InboundHandlerConfig) (inbound.Handler, error) {
+
+	/**
+		{
+			Tag: ''
+			ReceiverSettings: {
+					type:"v2ray.core.app.proxyman.ReceiverConfig",
+
+					value是 proto结构体 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
+					value: { 
+						PortRange: net.PortRange proto结构体 10086
+					}
+			},
+			ProxySettings: {
+				type: 'v2ray.core.proxy.vmess.inbound.Config',
+				value:  最终的config(proto生成的结构体): {
+								SecureEncryptionOnly: false
+								User: [
+									proto生成的protocol.User结构体 {
+										Account: {
+												type: 'v2ray.core.proxy.vemss.Account',
+												value: 整个Account二进制 { 只有id: 传入的id }
+										} 
+									},
+								]
+				}
+			}
+		},
+
+		{
+			Tag: ''
+			ReceiverSettings: {
+					type:"v2ray.core.app.proxyman.ReceiverConfig",
+
+					value是 proto结构体 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
+					value: { 
+						PortRange: net.PortRange proto结构体 10086
+					}
+			},
+			ProxySettings: {
+				type: 'v2ray.core.proxy.http.ServerConfig',
+				value: 空值
+			}
+		},
+
+	*/
+
+	// proto结构体 没有二进制了
 	rawReceiverSettings, err := config.ReceiverSettings.GetInstance()
 	if err != nil {
 		return nil, err
 	}
+
+	// proto结构体, 还有一个Account是二进制
 	proxySettings, err := config.ProxySettings.GetInstance()
 	if err != nil {
 		return nil, err
@@ -150,6 +200,7 @@ func NewHandler(ctx context.Context, config *core.InboundHandlerConfig) (inbound
 		return nil, newError("not a ReceiverConfig").AtError()
 	}
 
+	// nil
 	streamSettings := receiverSettings.StreamSettings
 	if streamSettings != nil && streamSettings.SocketSettings != nil {
 		ctx = session.ContextWithSockopt(ctx, &session.Sockopt{
@@ -157,6 +208,7 @@ func NewHandler(ctx context.Context, config *core.InboundHandlerConfig) (inbound
 		})
 	}
 
+	// nil
 	allocStrategy := receiverSettings.AllocationStrategy
 	if allocStrategy == nil || allocStrategy.Type == proxyman.AllocationStrategy_Always {
 		return NewAlwaysOnInboundHandler(ctx, tag, receiverSettings, proxySettings)
@@ -170,9 +222,49 @@ func NewHandler(ctx context.Context, config *core.InboundHandlerConfig) (inbound
 
 func init() {
 	common.Must(common.RegisterConfig((*proxyman.InboundConfig)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+		// in inbound.go proxyman, ctx:context.Background.WithValue(type core.V2rayKey, val <not Stringer>)  config:
+		fmt.Printf("  in inbound.go proxyman.InboundConfig, ctx:%+v  config:%+v\n", ctx, config)
 		return New(ctx, config.(*proxyman.InboundConfig))
 	}))
 	common.Must(common.RegisterConfig((*core.InboundHandlerConfig)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+		/**
+
+					Tag: ''
+			ReceiverSettings: {
+					type:"v2ray.core.app.proxyman.ReceiverConfig",
+
+					value是 proto结构体 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
+					value: { 
+						PortRange: net.PortRange proto结构体 10086
+					}
+			},
+			ProxySettings: {
+				type: 'v2ray.core.proxy.vmess.inbound.Config',
+				value:  最终的config(proto生成的结构体): {
+								SecureEncryptionOnly: false
+								User: [
+									proto生成的protocol.User结构体 {
+										Account: {
+												type: 'v2ray.core.proxy.vemss.Account',
+												value: 整个Account二进制 { 只有id: 传入的id }
+										} 
+									},
+								]
+				}
+			}
+
+		in inbound.go core, ctx:context.Background.WithValue(type core.V2rayKey, val <not Stringer>)  
+		config: {
+			receiver_settings:{
+				type:"v2ray.core.app.proxyman.ReceiverConfig" 
+				value:"\n\x06\x08\xe6N\x10\xe6N"
+			},
+			proxy_settings:{
+				type:"v2ray.core.proxy.vmess.inbound.Config" 
+				value:"\nN\x1aL\n\x1ev2ray.core.proxy.vmess.Account\x12*\n$b831381d-6324-4d53-ad4f-8cda48b30811\x1a\x02\x08\x02"
+			}
+		*/
+		fmt.Printf("  in inbound.go core.InboundHandlerConfig, ctx:%+v  config:%+v\n", ctx, config)
 		return NewHandler(ctx, config.(*core.InboundHandlerConfig))
 	}))
 }

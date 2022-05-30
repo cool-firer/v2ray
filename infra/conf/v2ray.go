@@ -15,20 +15,24 @@ import (
 )
 
 var (
-	inboundConfigLoader = NewJSONConfigLoader(ConfigCreatorCache{
+	inboundConfigLoader = NewJSONConfigLoader(ConfigCreatorCache{ // map[string][func]
 		"dokodemo-door": func() interface{} { return new(DokodemoConfig) },
 		"http":          func() interface{} { return new(HttpServerConfig) },
 		"shadowsocks":   func() interface{} { return new(ShadowsocksServerConfig) },
 		"socks":         func() interface{} { return new(SocksServerConfig) },
 		"vless":         func() interface{} { return new(VLessInboundConfig) },
+
 		"vmess":         func() interface{} { return new(VMessInboundConfig) },
+
 		"trojan":        func() interface{} { return new(TrojanServerConfig) },
 		"mtproto":       func() interface{} { return new(MTProtoServerConfig) },
 	}, "protocol", "settings")
 
 	outboundConfigLoader = NewJSONConfigLoader(ConfigCreatorCache{
 		"blackhole":   func() interface{} { return new(BlackholeConfig) },
+
 		"freedom":     func() interface{} { return new(FreedomConfig) },
+
 		"http":        func() interface{} { return new(HttpClientConfig) },
 		"shadowsocks": func() interface{} { return new(ShadowsocksClientConfig) },
 		"socks":       func() interface{} { return new(SocksClientConfig) },
@@ -142,7 +146,7 @@ func (c *InboundDetourAllocationConfig) Build() (*proxyman.AllocationStrategy, e
 
 type InboundDetourConfig struct {
 	Protocol       string                         `json:"protocol"`
-	PortRange      *PortRange                     `json:"port"`
+	PortRange      *PortRange                     `json:"port"` // 这个是自定义实现了unmarshal方法
 	ListenOn       *Address                       `json:"listen"`
 	Settings       *json.RawMessage               `json:"settings"`
 	Tag            string                         `json:"tag"`
@@ -153,13 +157,22 @@ type InboundDetourConfig struct {
 }
 
 // Build implements Buildable.
+/**
+	c是json结构体:
+	type InboundDetourConfig struct {
+		Protocol       string                         `json:"protocol"`  --> 'vmess'
+		PortRange      *PortRange                     `json:"port"` // 这个是自定义实现了unmarshal方法 --> 10086
+		Settings       *json.RawMessage               `json:"settings"` : { clients: [ { id: xxx } ] }
+	}
+**/
 func (c *InboundDetourConfig) Build() (*core.InboundHandlerConfig, error) {
-	receiverSettings := &proxyman.ReceiverConfig{}
+	// /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
+	receiverSettings := &proxyman.ReceiverConfig{} // ReceiverConfig proto 结构体
 
 	if c.PortRange == nil {
 		return nil, newError("port range not specified in InboundDetour.")
 	}
-	receiverSettings.PortRange = c.PortRange.Build()
+	receiverSettings.PortRange = c.PortRange.Build() // PortRange proto 结构体
 
 	if c.ListenOn != nil {
 		if c.ListenOn.Family().IsDomain() {
@@ -210,19 +223,101 @@ func (c *InboundDetourConfig) Build() (*core.InboundHandlerConfig, error) {
 
 	settings := []byte("{}")
 	if c.Settings != nil {
-		settings = ([]byte)(*c.Settings)
+		settings = ([]byte)(*c.Settings) // *json.RawMessage强转成字节切片
+		// settings内容: { clients: [ { id: xxx }, ] }
 	}
+
+	/**
+	settings: byte切片 {  
+		  clients: [
+		   { "id": "b831381d-6324-4d53-ad4f-8cda48b30811" }		 
+			] 
+		}
+	c.Protocol: 'vmess'
+	**/
+	// rawConfig: VMessInboundConfig结构体: { Users: 对应 [ {id: xxxx} ] 二进制流 }
+
+	/**
+		rawConfig: VMessInboundConfig 普通结构体 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/infra/conf/vmess.go
+		type VMessInboundConfig struct {
+			Users        []json.RawMessage   `json:"clients"` [ {id: xxx}, ] [  二进制流,  ] 用数组包裹的二进制流
+			Features     *FeaturesConfig     `json:"features"`
+			Defaults     *VMessDefaultConfig `json:"default"`
+			DetourConfig *VMessDetourConfig  `json:"detour"`
+			SecureOnly   bool                `json:"disableInsecureEncryption"`
+		}
+
+		c.Protocol是http时 new一个普通结构体 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/infra/conf/http.go
+		rawConfig: type HttpServerConfig struct {
+			Timeout     uint32         `json:"timeout"`
+			Accounts    []*HttpAccount `json:"accounts"`
+			Transparent bool           `json:"allowTransparent"`
+			UserLevel   uint32         `json:"userLevel"`
+		}
+	**/
 	rawConfig, err := inboundConfigLoader.LoadWithID(settings, c.Protocol)
 	if err != nil {
 		return nil, newError("failed to load inbound detour config.").Base(err)
 	}
+	// false
 	if dokodemoConfig, ok := rawConfig.(*DokodemoConfig); ok {
 		receiverSettings.ReceiveOriginalDestination = dokodemoConfig.Redirect
 	}
+
+	/**
+	config: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/vmess/inbound/config.proto 生成的结构体
+	User: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/common/protocol/user.proto 生成的结构体
+
+ 		ts 最终的config(proto生成的结构体): {
+			SecureEncryptionOnly: false
+			User: [
+				proto生成的protocol.User结构体 { 
+					Account: { 
+						type: 'v2ray.core.proxy.vemss.Account',
+						value: 整个Account二进制 { 只有id: 传入的id }
+					} 
+				},
+			]
+		}
+	*/
 	ts, err := rawConfig.(Buildable).Build()
 	if err != nil {
 		return nil, err
 	}
+
+	/**
+		core.InboundHandlerConfig proto生成的结构体: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto
+		{
+			Tag: ''
+			ReceiverSettings: {
+					type:"v2ray.core.app.proxyman.ReceiverConfig",
+
+					value是 proto结构体 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
+					value: { 
+						PortRange: net.PortRange proto结构体
+					}
+			},
+			ProxySettings: {
+				type: 'v2ray.core.proxy.vmess.inbound.Config',
+				value:  最终的config(proto生成的结构体): {
+								SecureEncryptionOnly: false
+								User: [
+									proto生成的protocol.User结构体 {
+										Account: {
+												type: 'v2ray.core.proxy.vemss.Account',
+												value: 整个Account二进制 { 只有id: 传入的id }
+										} 
+									},
+								]
+				}
+
+				对于http来说 value:
+				type: 'v2ray.core.proxy.http.Config'
+				/Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/http/config.go
+
+			}
+		}
+	*/
 
 	return &core.InboundHandlerConfig{
 		Tag:              c.Tag,
@@ -242,7 +337,16 @@ type OutboundDetourConfig struct {
 }
 
 // Build implements Buildable.
+/**
+	c是普通的结构体
+	type OutboundDetourConfig struct {
+		Protocol      string           `json:"protocol"`  --> 'freedom'
+		Settings      *json.RawMessage `json:"settings"` --> {}
+	}
+*/
 func (c *OutboundDetourConfig) Build() (*core.OutboundHandlerConfig, error) {
+
+	// /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto proto结构体
 	senderSettings := &proxyman.SenderConfig{}
 
 	if c.SendThrough != nil {
@@ -284,19 +388,53 @@ func (c *OutboundDetourConfig) Build() (*core.OutboundHandlerConfig, error) {
 		senderSettings.MultiplexSettings = ms
 	}
 
-	settings := []byte("{}")
+	settings := []byte("{}") // 相当于这个值
 	if c.Settings != nil {
 		settings = ([]byte)(*c.Settings)
 	}
+
+	/* rawConfig
+	type FreedomConfig struct {
+		DomainStrategy string  `json:"domainStrategy"`
+		Timeout        *uint32 `json:"timeout"`
+		Redirect       string  `json:"redirect"`
+		UserLevel      uint32  `json:"userLevel"`
+	}
+	*/
 	rawConfig, err := outboundConfigLoader.LoadWithID(settings, c.Protocol)
 	if err != nil {
 		return nil, newError("failed to parse to outbound detour config.").Base(err)
 	}
+	
+	/**
+		ts: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/config.proto proto结构体
+		ts: {
+			DomainStrategy: freedom.Config_AS_IS 枚举值,
+			UserLevel: 0,
+		}
+	*/
 	ts, err := rawConfig.(Buildable).Build()
 	if err != nil {
 		return nil, err
 	}
 
+	/**
+	core.OutboundHandlerConfig: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto 生成的结构体
+	{
+		SenderSettings: {
+			type: 'v2ray.core.app.proxyman.SenderConfig',
+			value: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto 空的proto结构体
+		},
+		tag: '',
+		ProxySettings: {
+			type: 'v2ray.core.proxy.freedom.Config',
+			value: {  /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/config.proto proto结构体
+					DomainStrategy: freedom.Config_AS_IS 枚举值,
+					UserLevel: 0,
+			}
+		}
+	}
+	*/
 	return &core.OutboundHandlerConfig{
 		SenderSettings: serial.ToTypedMessage(senderSettings),
 		Tag:            c.Tag,
@@ -318,10 +456,12 @@ type Config struct {
 	DNSConfig       *DnsConfig             `json:"dns"`
 	InboundConfigs  []InboundDetourConfig  `json:"inbounds"`
 	OutboundConfigs []OutboundDetourConfig `json:"outbounds"`
+
 	InboundConfig   *InboundDetourConfig   `json:"inbound"`        // Deprecated.
 	OutboundConfig  *OutboundDetourConfig  `json:"outbound"`       // Deprecated.
 	InboundDetours  []InboundDetourConfig  `json:"inboundDetour"`  // Deprecated.
 	OutboundDetours []OutboundDetourConfig `json:"outboundDetour"` // Deprecated.
+
 	Transport       *TransportConfig       `json:"transport"`
 	Policy          *PolicyConfig          `json:"policy"`
 	Api             *ApiConfig             `json:"api"`
@@ -451,15 +591,53 @@ func applyTransportConfig(s *StreamConfig, t *TransportConfig) {
 }
 
 // Build implements Buildable.
+// 现在还是在v2ctrl里面
+/**
+{
+  "inbounds": [
+    {
+      "port": 10086,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "b831381d-6324-4d53-ad4f-8cda48b30811"
+          }
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {}
+    }
+  ]
+}
+	c是json结构体, 调用时只有 InboundConfigs OutboundConfigs 有值
+	 	Config json结构体 {
+			...
+		InboundConfigs  []InboundDetourConfig  `json:"inbounds"`
+		OutboundConfigs []OutboundDetourConfig `json:"outbounds"`
+			...
+	}
+**/
+
 func (c *Config) Build() (*core.Config, error) {
 	config := &core.Config{
 		App: []*serial.TypedMessage{
+			// proto生成的结构体: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/dispatcher/config.proto
 			serial.ToTypedMessage(&dispatcher.Config{}),
+
+			// proto生成的结构体: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
 			serial.ToTypedMessage(&proxyman.InboundConfig{}),
+
+			// proto生成的结构体: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
 			serial.ToTypedMessage(&proxyman.OutboundConfig{}),
 		},
 	}
 
+	// 没配置c.Api
 	if c.Api != nil {
 		apiConf, err := c.Api.Build()
 		if err != nil {
@@ -485,6 +663,29 @@ func (c *Config) Build() (*core.Config, error) {
 	// let logger module be the first App to start,
 	// so that other modules could print log during initiating
 	config.App = append([]*serial.TypedMessage{logConfMsg}, config.App...)
+
+	/** 此时的config:
+	{
+		App: [   
+			{     
+				type: 'v2ray.core.app.log.Config',    
+				value: log.Config {  AccessLogType: 0   ErrorLogType: 1    ErrorLogLevel: 2 } 编码成[]byte  
+			},  
+			{     
+				type: 'v2ray.core.app.dispatcher.Config',    
+				value: proto.Marshal编码成[]byte  
+			},  
+			{     
+				type: 'v2ray.core.app.proxyman.InboundConfig',    
+				value:   
+			},  
+			{     
+				type: 'v2ray.core.app.proxyman.OutboundConfig',    
+				value:   
+			},
+		]
+	}
+	**/
 
 	if c.RouterConfig != nil {
 		routerConfig, err := c.RouterConfig.Build()
@@ -528,9 +729,18 @@ func (c *Config) Build() (*core.Config, error) {
 		inbounds = append(inbounds, c.InboundDetours...)
 	}
 
+	// 只配置了这个
 	if len(c.InboundConfigs) > 0 {
 		inbounds = append(inbounds, c.InboundConfigs...)
 	}
+	/**
+		此时的inbounds, 此时这三个有值
+	type InboundDetourConfig struct {
+		Protocol       string                         `json:"protocol"`  --> 'vmess'
+		PortRange      *PortRange                     `json:"port"` // 这个是自定义实现了unmarshal方法 --> 10086
+		Settings       *json.RawMessage               `json:"settings"` : { clients: [ { id: xxx } ] }
+	}
+	**/
 
 	// Backward compatibility.
 	if len(inbounds) > 0 && inbounds[0].PortRange == nil && c.Port > 0 {
@@ -540,6 +750,7 @@ func (c *Config) Build() (*core.Config, error) {
 		}
 	}
 
+	// 只有一个inbounds
 	for _, rawInboundConfig := range inbounds {
 		if c.Transport != nil {
 			if rawInboundConfig.StreamSetting == nil {
@@ -547,6 +758,36 @@ func (c *Config) Build() (*core.Config, error) {
 			}
 			applyTransportConfig(rawInboundConfig.StreamSetting, c.Transport)
 		}
+
+		/** 生成proto 结构体
+		core.InboundHandlerConfig proto生成的结构体: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto
+		{
+			Tag: ''
+			ReceiverSettings: {
+					type:"v2ray.core.app.proxyman.ReceiverConfig",
+
+					value是 proto结构体 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
+					value: { 
+						PortRange: net.PortRange proto结构体 10086
+					}
+			},
+			ProxySettings: {
+				type: 'v2ray.core.proxy.vmess.inbound.Config',
+				value:  最终的config(proto生成的结构体): {
+								SecureEncryptionOnly: false
+								User: [
+									proto生成的protocol.User结构体 {
+										Account: {
+												type: 'v2ray.core.proxy.vemss.Account',
+												value: 整个Account二进制 { 只有id: 传入的id }
+										} 
+									},
+								]
+				}
+			}
+		}
+
+		*/
 		ic, err := rawInboundConfig.Build()
 		if err != nil {
 			return nil, err
@@ -554,12 +795,68 @@ func (c *Config) Build() (*core.Config, error) {
 		config.Inbound = append(config.Inbound, ic)
 	}
 
+	/** 此时的config:
+	{
+		App: [
+			{     
+				type: 'v2ray.core.app.log.Config',    
+				value: log.Config {  AccessLogType: 0   ErrorLogType: 1    ErrorLogLevel: 2 } 编码成[]byte  
+			},  
+			{     
+				type: 'v2ray.core.app.dispatcher.Config',    
+				value: proto.Marshal编码成[]byte  
+			},  
+			{     
+				type: 'v2ray.core.app.proxyman.InboundConfig',    
+				value:   
+			},  
+			{     
+				type: 'v2ray.core.app.proxyman.OutboundConfig',    
+				value:   
+			},
+		],
+		Inbound: [
+
+		core.InboundHandlerConfig proto生成的结构体: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto
+		{
+			Tag: ''
+			ReceiverSettings: {
+					type:"v2ray.core.app.proxyman.ReceiverConfig",
+
+					value是 proto结构体 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
+					value: { 
+						PortRange: net.PortRange proto结构体 10086
+					}
+			},
+			ProxySettings: {
+				type: 'v2ray.core.proxy.vmess.inbound.Config',
+				value:  最终的config(proto生成的结构体): {
+								SecureEncryptionOnly: false
+								User: [
+									proto生成的protocol.User结构体 {
+										Account: {
+												type: 'v2ray.core.proxy.vemss.Account',
+												value: 整个Account二进制 { 只有id: 传入的id }
+										} 
+									},
+								]
+				}
+			}
+		}
+
+		]
+	}
+	**/
+
+
 	var outbounds []OutboundDetourConfig
 
+	// nil
 	if c.OutboundConfig != nil {
 		outbounds = append(outbounds, *c.OutboundConfig)
 	}
 
+	// = 0
 	if len(c.OutboundDetours) > 0 {
 		outbounds = append(outbounds, c.OutboundDetours...)
 	}
@@ -567,6 +864,14 @@ func (c *Config) Build() (*core.Config, error) {
 	if len(c.OutboundConfigs) > 0 {
 		outbounds = append(outbounds, c.OutboundConfigs...)
 	}
+	// 此时的outbounds, 只有两个有值
+	/** [
+	type OutboundDetourConfig struct {
+		Protocol      string           `json:"protocol"`  --> 'freedom'
+		Settings      *json.RawMessage `json:"settings"` --> {}
+	}
+	]
+	*/
 
 	for _, rawOutboundConfig := range outbounds {
 		if c.Transport != nil {
@@ -575,6 +880,24 @@ func (c *Config) Build() (*core.Config, error) {
 			}
 			applyTransportConfig(rawOutboundConfig.StreamSetting, c.Transport)
 		}
+
+			/**
+	core.OutboundHandlerConfig: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto 生成的结构体
+	{
+		SenderSettings: {
+			type: 'v2ray.core.app.proxyman.SenderConfig',
+			value: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto 空的proto结构体
+		},
+		tag: '',
+		ProxySettings: {
+			type: 'v2ray.core.proxy.freedom.Config',
+			value: {  /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/config.proto proto结构体
+					DomainStrategy: freedom.Config_AS_IS 枚举值,
+					UserLevel: 0,
+			}
+		}
+	}
+	*/
 		oc, err := rawOutboundConfig.Build()
 		if err != nil {
 			return nil, err
@@ -582,5 +905,77 @@ func (c *Config) Build() (*core.Config, error) {
 		config.Outbound = append(config.Outbound, oc)
 	}
 
+	/** 此时的config:
+	{
+		App: [
+			{     
+				type: 'v2ray.core.app.log.Config',    
+				value: log.Config {  AccessLogType: 0   ErrorLogType: 1    ErrorLogLevel: 2 } 编码成[]byte  
+			},  
+			{     
+				type: 'v2ray.core.app.dispatcher.Config',    
+				value: proto.Marshal编码成[]byte  
+			},  
+			{     
+				type: 'v2ray.core.app.proxyman.InboundConfig',    
+				value:   
+			},  
+			{     
+				type: 'v2ray.core.app.proxyman.OutboundConfig',    
+				value:   
+			},
+		],
+		Inbound: [
+
+		core.InboundHandlerConfig proto生成的结构体: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto
+		{
+			Tag: ''
+			ReceiverSettings: {
+					type:"v2ray.core.app.proxyman.ReceiverConfig",
+
+					value是 proto结构体 /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto
+					value: { 
+						PortRange: net.PortRange proto结构体 10086
+					}
+			},
+			ProxySettings: {
+				type: 'v2ray.core.proxy.vmess.inbound.Config',
+				value:  最终的config(proto生成的结构体): {
+								SecureEncryptionOnly: false
+								User: [
+									proto生成的protocol.User结构体 {
+										Account: {
+												type: 'v2ray.core.proxy.vemss.Account',
+												value: 整个Account二进制 { 只有id: 传入的id }
+										} 
+									},
+								]
+				}
+			}
+		}
+
+		],
+
+		Outbound: [
+			
+	core.OutboundHandlerConfig: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/config.proto 生成的结构体
+	{
+		SenderSettings: {
+			type: 'v2ray.core.app.proxyman.SenderConfig',
+			value: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto 空的proto结构体
+		},
+		tag: '',
+		ProxySettings: {
+			type: 'v2ray.core.proxy.freedom.Config',
+			value: {  /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/config.proto proto结构体
+					DomainStrategy: freedom.Config_AS_IS 枚举值,
+					UserLevel: 0,
+			}
+		}
+	}
+
+		]
+	}
+	**/
 	return config, nil
 }

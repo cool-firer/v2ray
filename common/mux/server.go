@@ -3,6 +3,7 @@ package mux
 import (
 	"context"
 	"io"
+	"fmt"
 
 	"v2ray.com/core"
 	"v2ray.com/core/common"
@@ -24,8 +25,10 @@ type Server struct {
 // NewServer creates a new mux.Server.
 func NewServer(ctx context.Context) *Server {
 	s := &Server{}
+
+	// 会调用, s.dispatcher = 指向 features里的*routing.Dispatcher实例
 	core.RequireFeatures(ctx, func(d routing.Dispatcher) {
-		s.dispatcher = d
+		s.dispatcher = d 
 	})
 	return s
 }
@@ -37,7 +40,9 @@ func (s *Server) Type() interface{} {
 
 // Dispatch implements routing.Dispatcher
 func (s *Server) Dispatch(ctx context.Context, dest net.Destination) (*transport.Link, error) {
+	fmt.Println("  in Dispatch /Users/demon/Desktop/work/gowork/src/v2ray.com/core/common/mux/server.go")
 	if dest.Address != muxCoolAddress {
+		// /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/dispatcher/default.go
 		return s.dispatcher.Dispatch(ctx, dest)
 	}
 

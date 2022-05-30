@@ -25,10 +25,13 @@ func (t *Periodic) hasClosed() bool {
 }
 
 func (t *Periodic) checkedExecute() error {
+
+	// 已经在running 那就是还没close
 	if t.hasClosed() {
 		return nil
 	}
 
+	// 立马调用
 	if err := t.Execute(); err != nil {
 		t.access.Lock()
 		t.running = false

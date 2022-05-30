@@ -5,6 +5,7 @@ package socks
 import (
 	"encoding/binary"
 	"io"
+	"fmt"
 
 	"v2ray.com/core/common"
 	"v2ray.com/core/common/buf"
@@ -211,9 +212,13 @@ func (s *ServerSession) Handshake(reader io.Reader, writer io.Writer) (*protocol
 		buffer.Release()
 		return nil, newError("insufficient header").Base(err)
 	}
-
+	
 	version := buffer.Byte(0)
 	cmd := buffer.Byte(1)
+
+	// version: 5, cmd: 1
+	fmt.Println("socks handshake, version:", version, " cmd:", cmd)
+
 	buffer.Release()
 
 	switch version {

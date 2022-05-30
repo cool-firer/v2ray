@@ -4,6 +4,7 @@ package tcp
 
 import (
 	"context"
+	"fmt"
 
 	"v2ray.com/core/common"
 	"v2ray.com/core/common/net"
@@ -14,8 +15,21 @@ import (
 )
 
 // Dial dials a new TCP connection to the given destination.
+
+/**
+&MemoryStreamConfig{
+	ProtocolName: 'tcp'
+	ProtocolSettings: 空的Config struct{
+			new了一个空的Config: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/transport/internet/tcp/config.pb.go
+			HeaderSettings      *serial.TypedMessage `protobuf:"bytes,2,opt,name=header_settings,json=headerSettings,proto3" json:"header_settings,omitempty"`
+			AcceptProxyProtocol bool                 `protobuf:"varint,3,opt,name=accept_proxy_protocol,json=acceptProxyProtocol,proto3" json:"accept_proxy_protocol,omitempty"`
+	},
+},
+*/
 func Dial(ctx context.Context, dest net.Destination, streamSettings *internet.MemoryStreamConfig) (internet.Connection, error) {
 	newError("dialing TCP to ", dest).WriteToLog(session.ExportIDToError(ctx))
+	fmt.Println("in tcp Dial dest:", dest, " /Users/demon/Desktop/work/gowork/src/v2ray.com/core/transport/internet/http/dialer.go")
+	
 	conn, err := internet.DialSystem(ctx, dest, streamSettings.SocketSettings)
 	if err != nil {
 		return nil, err

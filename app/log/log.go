@@ -7,6 +7,7 @@ package log
 import (
 	"context"
 	"sync"
+	"fmt"
 
 	"v2ray.com/core/common"
 	"v2ray.com/core/common/log"
@@ -16,18 +17,29 @@ import (
 type Instance struct {
 	sync.RWMutex
 	config       *Config
-	accessLogger log.Handler
+	accessLogger log.Handler // 只有Handle方法的 interface
 	errorLogger  log.Handler
 	active       bool
 }
 
 // New creates a new log.Instance based on the given config.
+		/**
+
+		ctx: context.Background.WithValue(type core.V2rayKey, val <not Stringer>)
+
+		Type: v2ray.core.app.log.Config, settings: error_log_type:Console error_log_level:Warning
+		config proto结构体:
+		{
+			error_log_type: Console,
+			error_log_level: Warning
+		}
+	*/
 func New(ctx context.Context, config *Config) (*Instance, error) {
 	g := &Instance{
 		config: config,
 		active: false,
 	}
-	log.RegisterHandler(g)
+	log.RegisterHandler(g) // 设置引用
 
 	// start logger instantly on inited
 	// other modules would log during init
@@ -40,17 +52,30 @@ func New(ctx context.Context, config *Config) (*Instance, error) {
 }
 
 func (g *Instance) initAccessLogger() error {
+	// None '';
+	fmt.Printf("in initAccessLogger, AccessLogType:%s,  AccessLogPath:%s \n", g.config.AccessLogType, g.config.AccessLogPath)
 	handler, err := createHandler(g.config.AccessLogType, HandlerCreatorOptions{
 		Path: g.config.AccessLogPath,
 	})
 	if err != nil {
 		return err
 	}
-	g.accessLogger = handler
+	g.accessLogger = handler // nil
 	return nil
 }
 
 func (g *Instance) initErrorLogger() error {
+	// 'Console', ''
+	fmt.Printf("in initErrorLogger, AccessLogType:%s,  AccessLogPath:%s \n", g.config.ErrorLogType, g.config.ErrorLogPath)
+	/**
+	handler结构体
+&generalLogger{
+		creator: logWriterCreator,
+		buffer:  make(chan Message, 16),
+		access:  semaphore.New(1),
+		done:    done.New(),
+	}
+	*/
 	handler, err := createHandler(g.config.ErrorLogType, HandlerCreatorOptions{
 		Path: g.config.ErrorLogPath,
 	})
@@ -70,7 +95,7 @@ func (g *Instance) startInternal() error {
 	g.Lock()
 	defer g.Unlock()
 
-	if g.active {
+	if g.active { // Start()方法调用之前就是active了, 直接return
 		return nil
 	}
 
@@ -137,7 +162,19 @@ func (g *Instance) Close() error {
 }
 
 func init() {
+		/**
+
+		ctx: context.Background.WithValue(type core.V2rayKey, val <not Stringer>)
+
+		Type: v2ray.core.app.log.Config, settings: error_log_type:Console error_log_level:Warning
+		config proto结构体:
+		{
+			error_log_type: Console,
+			error_log_level: Warning
+		}
+	*/
 	common.Must(common.RegisterConfig((*Config)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+		fmt.Printf("  in log.go, ctx:%+v  config:%+v\n", ctx, config)
 		return New(ctx, config.(*Config))
 	}))
 }

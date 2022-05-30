@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"fmt"
 
 	"golang.org/x/net/http2"
 	"v2ray.com/core/common"
@@ -86,6 +87,8 @@ func getHTTPClient(ctx context.Context, dest net.Destination, tlsSettings *tls.C
 
 // Dial dials a new TCP connection to the given destination.
 func Dial(ctx context.Context, dest net.Destination, streamSettings *internet.MemoryStreamConfig) (internet.Connection, error) {
+	fmt.Println("in http Dial /Users/demon/Desktop/work/gowork/src/v2ray.com/core/transport/internet/http/dialer.go")
+	
 	httpSettings := streamSettings.ProtocolSettings.(*Config)
 	tlsConfig := tls.ConfigFromStreamSettings(streamSettings)
 	if tlsConfig == nil {

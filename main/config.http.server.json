@@ -1,0 +1,14 @@
+{
+  "inbounds": [
+    {
+      "port": 1024,
+      "protocol": "http"
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {}
+    }
+  ]
+}

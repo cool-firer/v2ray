@@ -2,6 +2,7 @@ package internet
 
 import (
 	"context"
+	"fmt"
 
 	"v2ray.com/core/common/net"
 	"v2ray.com/core/common/session"
@@ -33,6 +34,17 @@ func RegisterTransportDialer(protocol string, dialer dialFunc) error {
 }
 
 // Dial dials a internet connection towards the given destination.
+
+/**
+&MemoryStreamConfig{
+	ProtocolName: 'tcp'
+	ProtocolSettings: 空的Config struct{
+			new了一个空的Config: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/transport/internet/tcp/config.pb.go
+			HeaderSettings      *serial.TypedMessage `protobuf:"bytes,2,opt,name=header_settings,json=headerSettings,proto3" json:"header_settings,omitempty"`
+			AcceptProxyProtocol bool                 `protobuf:"varint,3,opt,name=accept_proxy_protocol,json=acceptProxyProtocol,proto3" json:"accept_proxy_protocol,omitempty"`
+	},
+},
+*/
 func Dial(ctx context.Context, dest net.Destination, streamSettings *MemoryStreamConfig) (Connection, error) {
 	if dest.Network == net.Network_TCP {
 		if streamSettings == nil {
@@ -43,11 +55,13 @@ func Dial(ctx context.Context, dest net.Destination, streamSettings *MemoryStrea
 			streamSettings = s
 		}
 
-		protocol := streamSettings.ProtocolName
+		protocol := streamSettings.ProtocolName // 'tcp'
 		dialer := transportDialerCache[protocol]
 		if dialer == nil {
 			return nil, newError(protocol, " dialer not registered").AtError()
 		}
+		fmt.Println("dest.Network == net.Network_TCP")
+		///Users/demon/Desktop/work/gowork/src/v2ray.com/core/transport/internet/tcp/dialer.go
 		return dialer(ctx, dest, streamSettings)
 	}
 

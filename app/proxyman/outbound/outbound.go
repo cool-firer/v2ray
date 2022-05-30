@@ -6,6 +6,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"fmt"
 
 	"v2ray.com/core"
 	"v2ray.com/core/app/proxyman"
@@ -162,9 +163,38 @@ func (m *Manager) Select(selectors []string) []string {
 
 func init() {
 	common.Must(common.RegisterConfig((*proxyman.OutboundConfig)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+		// in outbound.go proxyman, ctx:context.Background.WithValue(type core.V2rayKey, val <not Stringer>)  config:
+		fmt.Printf("  in outbound.go proxyman, ctx:%+v  config:%+v\n", ctx, config)
 		return New(ctx, config.(*proxyman.OutboundConfig))
 	}))
 	common.Must(common.RegisterConfig((*core.OutboundHandlerConfig)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+		/**
+
+			// 实际
+			SenderSettings: {
+				type: 'v2ray.core.app.proxyman.SenderConfig',
+				value: /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/config.proto 空的proto结构体
+			},
+			tag: '',
+			ProxySettings: {
+				type: 'v2ray.core.proxy.freedom.Config',
+				value: {  /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/freedom/config.proto proto结构体
+					DomainStrategy: freedom.Config_AS_IS 枚举值,
+					UserLevel: 0,
+				}
+			}
+
+			打印出来:
+			in outbound.go OutboundHandlerConfig, ctx:context.Background.WithValue(type core.V2rayKey, val <not Stringer>)  
+			config:
+			sender_settings:{
+				type:"v2ray.core.app.proxyman.SenderConfig"
+			}  
+			proxy_settings:{
+				type:"v2ray.core.proxy.freedom.Config"
+			}
+		*/
+		fmt.Printf("  in /Users/demon/Desktop/work/gowork/src/v2ray.com/core/app/proxyman/outbound/outbound.go OutboundHandlerConfig, ctx:%+v  config:%+v\n", ctx, config)
 		return NewHandler(ctx, config.(*core.OutboundHandlerConfig))
 	}))
 }

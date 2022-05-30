@@ -2,6 +2,7 @@ package buf
 
 import (
 	"io"
+	"fmt"
 
 	"v2ray.com/core/common/bytespool"
 )
@@ -18,6 +19,15 @@ type Buffer struct {
 	v     []byte
 	start int32
 	end   int32
+	gtype string
+}
+
+func (b *Buffer) GetGtype() string {
+	return b.gtype
+}
+
+func (b *Buffer) SetGtype(gtype string) {
+	 b.gtype = gtype
 }
 
 // Release recycles the buffer into an internal buffer pool.
@@ -26,10 +36,10 @@ func (b *Buffer) Release() {
 		return
 	}
 
-	p := b.v
+	p := b.v // []byte
 	b.v = nil
 	b.Clear()
-	pool.Put(p)
+	pool.Put(p) // 放回去
 }
 
 // Clear clears the content of the buffer, results an empty buffer with
@@ -144,6 +154,7 @@ func (b *Buffer) Write(data []byte) (int, error) {
 // WriteByte writes a single byte into the buffer.
 func (b *Buffer) WriteByte(v byte) error {
 	if b.IsFull() {
+		fmt.Println("xixixixixi")
 		return newError("buffer full")
 	}
 	b.v[b.end] = v
@@ -173,6 +184,8 @@ func (b *Buffer) Read(data []byte) (int, error) {
 // ReadFrom implements io.ReaderFrom.
 func (b *Buffer) ReadFrom(reader io.Reader) (int64, error) {
 	n, err := reader.Read(b.v[b.end:])
+	// fmt.Println("[ClientConn] b.ReadFrom end:", b.end, " n:", n, " strContent:", string(b.v[b.end:b.end+int32(n)]))
+
 	b.end += int32(n)
 	return int64(n), err
 }
@@ -194,7 +207,11 @@ func (b *Buffer) String() string {
 	return string(b.Bytes())
 }
 
-var pool = bytespool.GetPool(Size)
+func (b *Buffer) getStartAndEnd() (int32, int32) {
+	return b.start, b.end
+}
+
+var pool = bytespool.GetPool(Size) // 初始长度2048的pool
 
 // New creates a Buffer with 0 length and 2K capacity.
 func New() *Buffer {

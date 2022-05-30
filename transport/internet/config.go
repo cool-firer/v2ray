@@ -1,6 +1,7 @@
 package internet
 
 import (
+	"fmt"
 	"v2ray.com/core/common/serial"
 	"v2ray.com/core/features"
 )
@@ -9,6 +10,8 @@ type ConfigCreator func() interface{}
 
 var (
 	globalTransportConfigCreatorCache = make(map[string]ConfigCreator)
+
+	// 这他马的又是在哪里填充值的？？
 	globalTransportSettings           []*TransportConfig
 )
 
@@ -74,7 +77,8 @@ func (c *StreamConfig) GetEffectiveProtocol() string {
 }
 
 func (c *StreamConfig) GetEffectiveTransportSettings() (interface{}, error) {
-	protocol := c.GetEffectiveProtocol()
+	protocol := c.GetEffectiveProtocol() // tcp
+	fmt.Println("      protocol:", protocol)
 	return c.GetTransportSettingsFor(protocol)
 }
 
@@ -87,7 +91,9 @@ func (c *StreamConfig) GetTransportSettingsFor(protocol string) (interface{}, er
 		}
 	}
 
+	fmt.Println("      globalTransportSettings:", globalTransportSettings) // []
 	for _, settings := range globalTransportSettings {
+		fmt.Println("      settings:", settings, " settings.GetUnifiedProtocolName()", settings.GetUnifiedProtocolName())
 		if settings.GetUnifiedProtocolName() == protocol {
 			return settings.GetTypedSettings()
 		}

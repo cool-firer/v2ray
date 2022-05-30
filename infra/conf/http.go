@@ -29,7 +29,7 @@ type HttpServerConfig struct {
 }
 
 func (c *HttpServerConfig) Build() (proto.Message, error) {
-	config := &http.ServerConfig{
+	config := &http.ServerConfig{ // proto结构体
 		Timeout:          c.Timeout,
 		AllowTransparent: c.Transparent,
 		UserLevel:        c.UserLevel,

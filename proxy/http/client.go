@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"fmt"
 
 	"golang.org/x/net/http2"
 
@@ -303,6 +304,7 @@ func (h *http2Conn) Close() error {
 
 func init() {
 	common.Must(common.RegisterConfig((*ClientConfig)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+		fmt.Printf("  in /Users/demon/Desktop/work/gowork/src/v2ray.com/core/proxy/http/client.go, ctx:%+v  config:%+v\n", ctx, config)
 		return NewClient(ctx, config.(*ClientConfig))
 	}))
 }
